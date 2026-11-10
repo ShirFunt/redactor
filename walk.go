@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 )
 
@@ -40,10 +42,40 @@ func (r *Redactor) redactValue(v any, inHeaders bool) any {
 		}
 		return t
 	case string:
+		if embedded, ok := r.redactEmbeddedJSON(t, inHeaders); ok {
+			return embedded
+		}
 		return r.redactString(t)
 	default: // json.Number, bool, nil: value rules only look at text
 		return t
 	}
+}
+
+// redactEmbeddedJSON handles strings that themselves contain a JSON object or
+// array, for example a response body stored as an escaped string. If the text
+// is not valid JSON, ok is false and the caller treats it as plain text.
+func (r *Redactor) redactEmbeddedJSON(s string, inHeaders bool) (string, bool) {
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) < 2 || (trimmed[0] != '{' && trimmed[0] != '[') {
+		return "", false
+	}
+	dec := json.NewDecoder(strings.NewReader(trimmed))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return "", false
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return "", false // data after the JSON value: treat as text
+	}
+	v = r.redactValue(v, inHeaders)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return "", false
+	}
+	return strings.TrimRight(buf.String(), "\n"), true
 }
 
 func (r *Redactor) redactObject(m map[string]any, inHeaders bool) {
