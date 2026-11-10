@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redactor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: redactor
+  template:
+    metadata:
+      labels:
+        app: redactor
+    spec:
+      # Longer than the 15 second graceful shutdown in the code.
+      terminationGracePeriodSeconds: 20
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redactor
+          image: redactor:0.1.0   # a fixed version tag, never "latest"
+          ports:
+            - containerPort: 8080
+          readinessProbe:          # no traffic until the rules are loaded and the port is open
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+          livenessProbe:           # restart the pod if the process hangs
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: rules
+              mountPath: /etc/redactor
+              readOnly: true
+      volumes:
+        - name: rules
+          configMap:
+            name: redactor-rules   # created separately, see below
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redactor
+spec:
+  selector:
+    app: redactor
+  ports:
+    - port: 80
+      targetPort: 8080
