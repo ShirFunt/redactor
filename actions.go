@@ -15,10 +15,11 @@ func (c *Config) applyAction(action, value string) string {
 	case "partial":
 		return partial(value, c.Settings.Partial.KeepLast, c.Settings.Partial.Fill)
 	case "hash":
+		if isSHA256Hex(value) {
+			return value // already hashed: keeps the tool idempotent
+		}
 		sum := sha256.Sum256([]byte(value))
 		return hex.EncodeToString(sum[:])
-	default:
-		return ""
 	}
 }
 
@@ -56,4 +57,17 @@ func luhnValid(s string) bool {
 		digits++
 	}
 	return digits >= 13 && digits <= 19 && sum%10 == 0
+}
+
+// isSHA256Hex reports whether s looks like a hex-encoded SHA-256 digest.
+func isSHA256Hex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }

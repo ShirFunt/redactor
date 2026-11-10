@@ -48,3 +48,14 @@ func TestApplyAction(t *testing.T) {
 		t.Errorf("hash = %q", got)
 	}
 }
+func TestHashIdempotent(t *testing.T) {
+	cfg, err := LoadConfig("rules.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	once := cfg.applyAction("hash", "secret")
+	twice := cfg.applyAction("hash", once)
+	if once != twice {
+		t.Errorf("hash is not idempotent: %q vs %q", once, twice)
+	}
+}
