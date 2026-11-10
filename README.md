@@ -17,7 +17,8 @@ On Windows the binary is `redactor.exe`.
 - A per-rule redaction summary and warnings go to **stderr**.
 - If the rules file cannot be loaded, the tool exits with code 1 and writes nothing to stdout.
 
-**Service mode:** TODO (not implemented yet).
+./redactor --serve --addr :8080 --rules /etc/redactor/rules.yaml
+curl -X POST --data-binary @input.ndjson http://localhost:8080/redact
 
 ## Design decisions and trade-offs
 
@@ -50,8 +51,13 @@ Running the tool on the sample data also showed two more gaps in the provided ru
 
 ## Deployment files
 
-TODO
+- **Dockerfile:** multi-stage build. The final image is `distroless/static:nonroot`, so it has no shell and runs as a non-root user. The binary is static (`CGO_ENABLED=0`).
+- **k8s.yaml:** a Deployment with two replicas and a Service. The readiness probe keeps traffic away until the rules are loaded. The liveness probe restarts a hung process. The container uses a read-only root filesystem, drops all capabilities, and has resource limits.
+- **Rules as a ConfigMap:** the rules are not baked into the image. They are mounted from a ConfigMap, so they can change without a rebuild. If the ConfigMap is missing, the pod does not start, which matches the fail-closed rule.
+- **Not tested on a cluster.** I validated the manifest with `kubectl apply --dry-run=client`. The image tag `0.1.0` is a placeholder for a real release process.
 
+./redactor --serve --addr :8080 --rules /etc/redactor/rules.yaml
+curl -X POST --data-binary @input.ndjson http://localhost:8080/redact
 ## Known limitations and what I would do with more time
 
 - **Key order and duplicate keys.** Decoded objects are Go maps, so output keys are sorted alphabetically and duplicate keys keep only the last value. The output is equivalent but not byte-identical to the input. A token-based rewriter would avoid this.
