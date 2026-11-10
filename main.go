@@ -14,12 +14,24 @@ func main() {
 
 func run() int {
 	rulesPath := flag.String("rules", "rules.yaml", "path to the rules file")
+	serve := flag.Bool("serve", false, "run as an HTTP service instead of a command line tool")
+	addr := flag.String("addr", ":8080", "listen address in service mode")
 	flag.Parse()
 
+	// Rules are loaded first, in both modes. If they cannot be loaded we exit
+	// before opening any port, so the service never passes traffic unredacted.
 	cfg, err := LoadConfig(*rulesPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
+	}
+
+	if *serve {
+		if err := runServer(cfg, *addr); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		return 0
 	}
 
 	var in io.Reader = os.Stdin // no file given: read stdin
