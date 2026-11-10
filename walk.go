@@ -45,7 +45,7 @@ func (r *Redactor) redactValue(v any, inHeaders bool) any {
 		if embedded, ok := r.redactEmbeddedJSON(t, inHeaders); ok {
 			return embedded
 		}
-		return r.redactString(t)
+		return r.redactString(r.redactPairs(t))
 	default: // json.Number, bool, nil: value rules only look at text
 		return t
 	}
